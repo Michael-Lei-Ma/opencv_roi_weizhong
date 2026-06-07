@@ -1,0 +1,264 @@
+﻿<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width,initial-scale=1" />
+  <title>自动截图与上传管理</title>
+  <style>
+    body{margin:0;padding:20px;font-family:Arial,Helvetica,sans-serif;background:#f3f6fb;color:#222}
+    .header{display:flex;flex-wrap:wrap;align-items:center;justify-content:space-between;gap:12px}
+    .header h1{margin:0;font-size:22px}
+    .controls button{margin:4px;padding:10px 16px;border:0;border-radius:6px;background:#1d7cf2;color:#fff;cursor:pointer}
+    .controls button:disabled{opacity:.5;cursor:default}
+    .section{background:#fff;border-radius:14px;box-shadow:0 2px 18px rgba(15,23,42,.08);padding:18px;margin-top:18px}
+    .grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(180px,1fr));gap:16px}
+    .card{padding:18px;border-radius:12px;background:#f8fbff;min-height:120px}
+    .card .value{font-size:32px;font-weight:700}
+    .card .label{margin-top:10px;color:#556272;font-size:13px}
+    .muted{color:#556272;font-size:13px;word-break:break-word}
+    .preview{display:flex;flex-wrap:wrap;gap:16px}
+    .preview img{max-width:100%;border:1px solid #d8dee7;border-radius:10px}
+    .form-row{display:flex;flex-wrap:wrap;gap:12px;align-items:center;margin-top:12px}
+    .form-row input{flex:1;min-width:160px;padding:10px;border:1px solid #d8dee7;border-radius:8px}
+    .button-group{display:flex;flex-wrap:wrap;gap:10px;margin-top:12px}
+    .footer{margin-top:18px;font-size:13px;color:#556272}
+    .pending-list{max-height:260px;overflow:auto;border:1px solid #e2e8f0;border-radius:10px;padding:12px;background:#fbfdff}
+    .pending-list li{padding:6px 0;border-bottom:1px solid #e7eef6}
+    .pending-list li:last-child{border-bottom:none}
+  </style>
+</head>
+<body>
+  <div class="header">
+    <h1>自动截图与上传管理</h1>
+    <div class="controls">
+      <button onclick="startAuto()" id="startAutoBtn">启动自动截图</button>
+      <button onclick="stopAuto()" id="stopAutoBtn">停止自动截图</button>
+        <button onclick="startOverlay()" id="startOverlayBtn">启动悬浮截图</button>
+        <button onclick="stopOverlay()" id="stopOverlayBtn">停止悬浮截图</button>
+        <button onclick="refreshPreview()" id="refreshPreviewBtn">刷新预览</button>
+      <div class="card">
+        <div class="value" id="uploadedCount">0</div>
+        <div class="label">已上传数量</div>
+      </div>
+      <div class="card">
+        <div class="value" id="pendingCount">0</div>
+        <div class="label">待上传数量</div>
+      </div>
+      <div class="card">
+        <div class="value" id="failedCount">0</div>
+        <div class="label">上传失败次数</div>
+      </div>
+      <div class="card">
+        <div class="value muted" id="currentFile">-</div>
+        <div class="label">当前上传文件</div>
+      </div>
+    </div>
+
+    <div class="form-row" style="margin-top:18px; gap:12px; align-items:flex-start;">
+      <div style="flex:1; min-width:260px;">
+        <div class="label">自动截图状态</div>
+        <div id="autoStatus" class="muted">加载中...</div>
+      </div>
+      <div style="flex:1; min-width:260px;">
+        <div class="label">最近错误</div>
+        <div id="lastError" class="muted">-</div>
+      </div>
+      <div style="flex:1; min-width:260px;">
+        <div class="label">更新时间</div>
+        <div id="updatedAt" class="muted">-</div>
+      </div>
+    </div>
+  </div>
+
+  <div class="section">
+    <h2>手动截图与保存</h2>
+    <div class="preview" id="previewArea" style="display:none;">
+      <div style="flex:1; min-width:220px;">
+        <p class="label">截图预览</p>
+        <img id="previewImage" src="" alt="截图预览">
+      </div>
+      <div style="flex:1; min-width:220px;">
+        <div class="form-row">
+          <input type="text" id="filenameInput" placeholder="输入保存文件名，例如 example.png">
+        </div>
+        <div class="button-group">
+          <button onclick="saveScreenshot()">保存到 sources/</button>
+          <button onclick="uploadScreenshot()">上传到缓存</button>
+          <button onclick="cancelScreenshot()">取消</button>
+        </div>
+      </div>
+    </div>
+      <div id="noPreview" class="muted">尚未获得截图。请点击“启动悬浮截图”，切换到目标页面后点击悬浮按钮，然后点击“刷新预览”。</div>  </div>
+
+  <div class="section">
+    <h2>待上传缓存文件</h2>
+    <div id="pendingList" class="pending-list"></div>
+  </div>
+
+  <script>
+    let currentPreview = null;
+    function renderPreview(dataUrl) {
+      document.getElementById('previewImage').src = dataUrl;
+      document.getElementById('previewArea').style.display = 'flex';
+      document.getElementById('noPreview').style.display = 'none';
+      currentPreview = dataUrl;
+    }
+
+    function clearPreview() {
+      document.getElementById('previewImage').src = '';
+      document.getElementById('previewArea').style.display = 'none';
+      document.getElementById('noPreview').style.display = 'block';
+      currentPreview = null;
+    }
+
+    function updateStatus() {
+      fetch('/api/status')
+        .then(r => r.json())
+        .then(data => {
+          document.getElementById('uploadedCount').textContent = data.uploaded_count ?? 0;
+          document.getElementById('pendingCount').textContent = data.pending_count ?? 0;
+          document.getElementById('failedCount').textContent = data.failed_count ?? 0;
+          document.getElementById('currentFile').textContent = data.current_file || '-';
+          document.getElementById('lastError').textContent = data.last_error || '-';
+          document.getElementById('updatedAt').textContent = data.updated_at || '-';
+          document.getElementById('autoStatus').textContent = data.auto_running ? '自动截屏已启动' : '自动截屏已停止';
+          renderPendingList(data.pending_files || []);
+        })
+        .catch(() => {
+          document.getElementById('lastError').textContent = '无法读取状态';
+        });
+    }
+
+    function renderPendingList(items) {
+      const list = document.getElementById('pendingList');
+      if (!items || items.length === 0) {
+        list.innerHTML = '<p class="muted">当前没有待上传缓存文件。</p>';
+        return;
+      }
+      list.innerHTML = '<ul>' + items.map(name => `<li>${name}</li>`).join('') + '</ul>';
+    }
+
+    function startAuto() {
+      fetch('/api/start_auto', { method: 'POST' })
+        .then(r => r.json())
+        .then(() => updateStatus())
+        .catch(() => alert('启动自动截图失败'));
+    }
+
+    function stopAuto() {
+      fetch('/api/stop_auto', { method: 'POST' })
+        .then(r => r.json())
+        .then(() => updateStatus())
+        .catch(() => alert('停止自动截图失败'));
+    }
+
+    function startOverlay() {
+      fetch('/api/start_overlay', { method: 'POST' })
+        .then(r => r.json())
+        .then(data => {
+          if (data.status === 'started') {
+            alert('悬浮截图按钮已启动，切换到目标页面后点击悬浮按钮截图。');
+          } else {
+            alert('悬浮截图按钮已在运行。');
+          }
+          updateStatus();
+        })
+        .catch(() => alert('启动悬浮截图失败'));
+    }
+
+    function stopOverlay() {
+      fetch('/api/stop_overlay', { method: 'POST' })
+        .then(r => r.json())
+        .then(data => {
+          if (data.status === 'stopped') {
+            alert('悬浮截图按钮已停止。');
+          } else {
+            alert('悬浮截图按钮未运行。');
+          }
+          updateStatus();
+        })
+        .catch(() => alert('停止悬浮截图失败'));
+    }
+
+    function refreshPreview() {
+      fetch('/api/latest_screenshot')
+        .then(r => r.json())
+        .then(data => {
+          if (data.error) {
+            throw new Error(data.error);
+          }
+          renderPreview(data.image);
+        })
+        .catch(err => alert('刷新预览失败：' + err.message));
+    }
+
+    function takeScreenshot() {
+      // 保留旧的直接截图功能，如果需要仍可使用
+      fetch('/api/manual_screenshot', { method: 'POST' })
+        .then(r => r.json())
+        .then(data => {
+          if (data.error) {
+            throw new Error(data.error);
+          }
+          renderPreview(data.image);
+        })
+        .catch(err => alert('手动截图失败：' + err.message));
+    }
+
+    function uploadScreenshot() {
+      if (!currentPreview) {
+        alert('请先手动截图');
+        return;
+      }
+      fetch('/api/upload_manual', { method: 'POST' })
+        .then(r => r.json())
+        .then(data => {
+          if (data.error) {
+            throw new Error(data.error);
+          }
+          alert('截图已加入本地缓存等待上传: ' + data.path);
+          updateStatus();
+        })
+        .catch(err => alert('缓存上传失败：' + err.message));
+    }
+
+    function saveScreenshot() {
+      const filename = document.getElementById('filenameInput').value.trim();
+      if (!filename) {
+        alert('请输入保存文件名');
+        return;
+      }
+      fetch('/api/save', {
+        method: 'POST',
+        headers: {'Content-Type': 'application/json'},
+        body: JSON.stringify({filename})
+      })
+      .then(r => r.json())
+      .then(data => {
+        if (data.error) {
+          throw new Error(data.error);
+        }
+        alert('保存成功：' + data.target);
+        clearPreview();
+        document.getElementById('filenameInput').value = '';
+      })
+      .catch(err => alert('保存失败：' + err.message));
+    }
+
+    function cancelScreenshot() {
+      fetch('/api/cancel', { method: 'POST' })
+        .then(() => {
+          clearPreview();
+        })
+        .catch(() => alert('取消失败'));
+    }
+
+    function refreshStatus() {
+      updateStatus();
+    }
+
+    setInterval(updateStatus, 3000);
+    updateStatus();
+  </script>
+</body>
+</html>

@@ -1,0 +1,201 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>截图模版初始化工具</title>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            max-width: 800px;
+            margin: 0 auto;
+            padding: 20px;
+        }
+        .container {
+            border: 1px solid #ccc;
+            padding: 20px;
+            border-radius: 5px;
+        }
+        button {
+            padding: 10px 20px;
+            margin: 5px;
+            cursor: pointer;
+        }
+        img {
+            max-width: 100%;
+            border: 1px solid #ccc;
+            margin-top: 10px;
+        }
+        input[type="text"] {
+            padding: 8px;
+            width: 300px;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>截图模版初始化工具</h1>
+        <p>此工具用于截取当前页面全屏作为模版图片，用于后续的图像处理。</p>
+
+        <label for="filename">截图文件名:</label><br>
+        <input type="text" id="filename" value="screenshot_case_circulation_record.png"><br><br>
+
+        <button onclick="startOverlay()">1. 打开悬浮截图按钮</button>
+        <button onclick="takeScreenshot()">2. 当前屏幕截图</button>
+        <button onclick="refreshScreenshot()">3. 刷新最新截图</button><br><br>
+
+        <label for="uploadInput">或上传已有截图:</label><br>
+        <input type="file" id="uploadInput" accept="image/png,image/jpeg" onchange="uploadImage(event)"><br>
+        <button onclick="clearUpload()" id="clearUploadBtn" style="display: none; margin-top: 5px;">删除已上传图片</button><br><br>
+
+        <div id="imageContainer" style="display: none;">
+            <p>截图预览:</p>
+            <img id="screenshot" src="" alt="截图预览"><br>
+            <button onclick="retakeScreenshot()">重新截图</button><br><br>
+        </div>
+
+        <button onclick="saveScreenshot()" id="saveBtn" style="display: none;">保存截图</button>
+        <button onclick="cancelAction()" id="cancelBtn" style="display: none;">取消操作</button>
+        <button onclick="stopOverlay()" id="stopOverlayBtn" style="display: inline;">停止悬浮按钮</button>
+    </div>
+
+    <script>
+        function showPreview(imageData) {
+            document.getElementById('screenshot').src = imageData;
+            document.getElementById('imageContainer').style.display = 'block';
+            document.getElementById('saveBtn').style.display = 'inline';
+            document.getElementById('cancelBtn').style.display = 'inline';
+            document.getElementById('clearUploadBtn').style.display = 'inline';
+        }
+
+        function takeScreenshot() {
+            fetch('/screenshot')
+            .then(response => response.json())
+            .then(data => {
+                if (data.error) {
+                    throw new Error(data.error);
+                }
+                showPreview(data.image);
+            })
+            .catch(error => {
+                alert('截图失败: ' + error);
+            });
+        }
+
+        function startOverlay() {
+            fetch('/start_overlay')
+            .then(response => response.json())
+            .then(data => {
+                alert(data.status === 'started' ? '悬浮截图按钮已启动，请切换到目标页面并点击该按钮。' : '悬浮截图按钮已经在运行。');
+            })
+            .catch(error => {
+                alert('启动悬浮按钮失败: ' + error);
+            });
+        }
+
+        function stopOverlay() {
+            fetch('/stop_overlay')
+            .then(response => response.json())
+            .then(data => {
+                alert(data.status === 'stopped' ? '悬浮按钮已停止。' : '悬浮按钮未运行。');
+            })
+            .catch(error => {
+                alert('停止悬浮按钮失败: ' + error);
+            });
+        }
+
+        function refreshScreenshot() {
+            fetch('/latest_screenshot')
+            .then(response => {
+                if (!response.ok) {
+                    throw new Error('当前没有最新截图，请先截图或上传图片。');
+                }
+                return response.json();
+            })
+            .then(data => {
+                if (data.image) {
+                    showPreview(data.image);
+                }
+            })
+            .catch(error => {
+                alert(error);
+            });
+        }
+
+        function retakeScreenshot() {
+            takeScreenshot();
+        }
+
+        function uploadImage(event) {
+            const file = event.target.files[0];
+            if (!file) {
+                return;
+            }
+            const formData = new FormData();
+            formData.append('file', file);
+            fetch('/upload', {
+                method: 'POST',
+                body: formData
+            })
+            .then(response => response.json())
+            .then(data => {
+                if (data.error) {
+                    throw new Error(data.error);
+                }
+                showPreview(data.image);
+            })
+            .catch(error => {
+                alert('上传失败: ' + error);
+            });
+        }
+
+        function clearUpload() {
+            document.getElementById('uploadInput').value = '';
+            document.getElementById('screenshot').src = '';
+            document.getElementById('imageContainer').style.display = 'none';
+            document.getElementById('saveBtn').style.display = 'none';
+            document.getElementById('cancelBtn').style.display = 'none';
+            document.getElementById('clearUploadBtn').style.display = 'none';
+        }
+
+        function saveScreenshot() {
+            const filename = document.getElementById('filename').value;
+            if (!filename) {
+                alert('请输入文件名');
+                return;
+            }
+            fetch('/save', {
+                method: 'POST',
+                headers: {'Content-Type': 'application/json'},
+                body: JSON.stringify({filename: filename})
+            })
+            .then(response => response.json())
+            .then(data => {
+                if (data.error) {
+                    throw new Error(data.error);
+                }
+                alert('保存成功！文件已保存到 sources/ 文件夹下。');
+                document.getElementById('imageContainer').style.display = 'none';
+                document.getElementById('saveBtn').style.display = 'none';
+                document.getElementById('cancelBtn').style.display = 'none';
+                document.getElementById('clearUploadBtn').style.display = 'none';
+            })
+            .catch(error => {
+                alert('保存失败: ' + error);
+            });
+        }
+
+        function cancelAction() {
+            fetch('/cancel')
+            .then(response => response.json())
+            .then(data => {
+                document.getElementById('imageContainer').style.display = 'none';
+                document.getElementById('saveBtn').style.display = 'none';
+                document.getElementById('cancelBtn').style.display = 'none';
+                document.getElementById('clearUploadBtn').style.display = 'none';
+                alert('操作已取消');
+            });
+        }
+    </script>
+</body>
+</html>

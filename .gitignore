@@ -1,0 +1,6 @@
+__pycache__/
+.vscode/
+.idea/
+*.log
+*.tmp
+.upload_cache/

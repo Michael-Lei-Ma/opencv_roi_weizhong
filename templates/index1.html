@@ -1,0 +1,90 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width,initial-scale=1" />
+  <title>上传进度看板</title>
+  <style>
+    :root{font-family:Helvetica,Arial,sans-serif;color:#222}
+    body{margin:0;padding:24px;background:#f5f7fa}
+    .header{display:flex;align-items:center;justify-content:space-between;gap:12px;flex-wrap:wrap}
+    h1{font-size:20px;margin:0}
+    .controls button{margin-left:8px;padding:10px 14px;border:none;border-radius:6px;background:#1e90ff;color:#fff;cursor:pointer}
+    .controls button:hover{opacity:.95}
+    .grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(180px,1fr));gap:12px;margin-top:18px}
+    .card{background:#fff;padding:18px;border-radius:12px;box-shadow:0 2px 10px rgba(16,24,40,0.08)}
+    .value{font-size:32px;font-weight:700}
+    .label{color:#666;margin-top:8px;font-size:13px}
+    .muted{color:#666;font-size:13px;word-break:break-word}
+    footer{margin-top:22px;color:#666;font-size:13px}
+  </style>
+</head>
+<body>
+  <div class="header">
+    <h1>上传进度看板</h1>
+    <div class="controls">
+      <button onclick="startOverlay()">启动悬浮截图</button>
+      <button onclick="stopOverlay()">停止悬浮截图</button>
+      <button onclick="takeSnapshot()">手动截图</button>
+    </div>
+  </div>
+
+  <div class="grid">
+    <div class="card">
+      <div class="value" id="uploadedCount">0</div>
+      <div class="label">已上传数量</div>
+    </div>
+    <div class="card">
+      <div class="value" id="pendingCount">0</div>
+      <div class="label">待上传数量（本地缓存）</div>
+    </div>
+    <div class="card">
+      <div class="value" id="retryCount">0</div>
+      <div class="label">上传重试次数</div>
+    </div>
+    <div class="card">
+      <div class="value muted" id="currentFile">-</div>
+      <div class="label">当前上传文件</div>
+    </div>
+  </div>
+
+  <div style="display:flex;gap:12px;margin-top:16px;flex-wrap:wrap">
+    <div style="flex:1" class="card">
+      <div style="font-size:13px;color:#444">最近错误</div>
+      <div class="muted" id="lastError">-</div>
+    </div>
+    <div style="width:220px" class="card">
+      <div style="font-size:13px;color:#444">更新时间</div>
+      <div class="muted" id="updatedAt">-</div>
+    </div>
+  </div>
+
+  <footer>
+    注：自动截图仅做短期缓存，上传成功后本地缓存自动删除。除 `sources/` 与 `templates/` 外，自动截图不保留在本地。
+  </footer>
+
+  <script>
+    function updateStatus(){
+      fetch('/status')
+        .then(r=>r.json())
+        .then(data=>{
+          document.getElementById('uploadedCount').textContent = data.uploaded_count ?? 0;
+          document.getElementById('pendingCount').textContent = data.pending_count ?? 0;
+          document.getElementById('retryCount').textContent = data.retry_count ?? 0;
+          document.getElementById('currentFile').textContent = data.current_file || '-';
+          document.getElementById('lastError').textContent = data.last_error || '-';
+          document.getElementById('updatedAt').textContent = data.updated_at || '-';
+        })
+        .catch(() => {
+          document.getElementById('lastError').textContent = '无法读取状态';
+        });
+    }
+    setInterval(updateStatus, 2000);
+    updateStatus();
+
+    function startOverlay(){ fetch('/start_overlay').catch(()=>{}); }
+    function stopOverlay(){ fetch('/stop_overlay').catch(()=>{}); }
+    function takeSnapshot(){ fetch('/screenshot').catch(()=>{}); }
+  </script>
+</body>
+</html>
