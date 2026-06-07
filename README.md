@@ -1,8 +1,8 @@
-# opencv_v23_weizhong
+# opencv_roi_weizhong
 
 ## 项目概述
 
-`opencv_v23_weizhong` 是一个基于 OpenCV、Flask 和 FastAPI 的 Windows 截图识别与上传系统。它通过屏幕截图、模板匹配和事件驱动的页面检测，自动识别特定页面并将截图缓存后上传到本地上传服务。
+`opencv_roi_weizhong` 是一个基于 OpenCV、Flask 和 FastAPI 的 Windows 截图识别与上传系统。它通过屏幕截图、模板匹配和事件驱动的页面检测，自动识别特定页面并将截图缓存后上传到本地上传服务。
 
 ## 关键功能
 
@@ -107,4 +107,4 @@ python main.py
 
 ## 结论
 
-`opencv_v23_weizhong` 是一个面向 Windows 屏幕自动抓图、模板识别与上传的项目，适合用于业务屏幕页的自动化截图提交与缓存管理。该项目以 `main.py`/`web_app.py` 为前端控制入口，以 `app.py` 为图片上传接口，并通过 `agent.py` 和 `detector.py` 构建自动化识别流程。
+`opencv_roi_weizhong` 是一个面向 Windows 屏幕自动抓图、模板识别与上传的项目，适合用于业务屏幕页的自动化截图提交与缓存管理。该项目以 `main.py`/`web_app.py` 为前端控制入口，以 `app.py` 为图片上传接口，并通过 `agent.py` 和 `detector.py` 构建自动化识别流程。
